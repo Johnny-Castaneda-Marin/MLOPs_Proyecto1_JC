@@ -6,6 +6,7 @@ x-airflow-common:
     dockerfile: Dockerfile
   networks:
     - airflow-net
+    - storage-net
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -18,7 +19,7 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    AIRFLOW_CONN_MYSQL_DEFAULT: 'mysql://user:user1234@mysql:3306'
+    AIRFLOW_CONN_MYSQL_DEFAULT: 'mysql://user:user1234@mysql:3306/mydatabase'
   volumes:
     - ${AIRFLOW_PROJ_DIR:-..}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-..}/logs:/opt/airflow/logs

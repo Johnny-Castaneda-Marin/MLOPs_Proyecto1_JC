@@ -1,0 +1,613 @@
+name: docker
+services:
+  airflow-init:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/docker/airflow
+      dockerfile: Dockerfile
+    command:
+      - -c
+      - |
+        function ver() {
+          printf "%04d%04d%04d%04d" $${1//./ }
+        }
+        airflow_version=$$(AIRFLOW__LOGGING__LOGGING_LEVEL=INFO && gosu airflow airflow version)
+        airflow_version_comparable=$$(ver $${airflow_version})
+        min_airflow_version=2.2.0
+        min_airflow_version_comparable=$$(ver $${min_airflow_version})
+        if (( airflow_version_comparable < min_airflow_version_comparable )); then
+          echo
+          echo -e "\033[1;31mERROR!!!: Too old Airflow version $${airflow_version}!\e[0m"
+          echo "The minimum Airflow version supported: $${min_airflow_version}. Only use this or higher!"
+          echo
+          exit 1
+        fi
+        if [[ -z "" ]]; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: AIRFLOW_UID not set!\e[0m"
+          echo "If you are on Linux, you SHOULD follow the instructions below to set "
+          echo "AIRFLOW_UID environment variable, otherwise files will be owned by root."
+          echo "For other operating systems you can get rid of the warning with manually created .env file:"
+          echo "    See: https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#setting-the-right-airflow-user"
+          echo
+        fi
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+        disk_available=$$(df / | tail -1 | awk '{print $$4}')
+        warning_resources="false"
+        if (( mem_available < 4000 )) ; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough memory available for Docker.\e[0m"
+          echo "At least 4GB of memory required. You have $$(numfmt --to iec $$((mem_available * one_meg)))"
+          echo
+          warning_resources="true"
+        fi
+        if (( cpus_available < 2 )); then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough CPUS available for Docker.\e[0m"
+          echo "At least 2 CPUs recommended. You have $${cpus_available}"
+          echo
+          warning_resources="true"
+        fi
+        if (( disk_available < one_meg * 10 )); then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough Disk space available for Docker.\e[0m"
+          echo "At least 10 GBs recommended. You have $$(numfmt --to iec $$((disk_available * 1024 )))"
+          echo
+          warning_resources="true"
+        fi
+        if [[ $${warning_resources} == "true" ]]; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: You have not enough resources to run Airflow (see above)!\e[0m"
+          echo "Please follow the instructions to increase amount of resources available:"
+          echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
+          echo
+        fi
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R ":0" /sources/{logs,dags,plugins}
+        chown -R ":0" /opt/airflow/models
+        chmod -R 775 /opt/airflow/models
+        exec /entrypoint airflow version
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    entrypoint:
+      - /bin/bash
+    environment:
+      _AIRFLOW_DB_UPGRADE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _PIP_ADDITIONAL_REQUIREMENTS: ""
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+    image: penguins-airflow:latest
+    networks:
+      airflow-net: null
+      storage-net: null
+    user: "0:0"
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1
+        target: /sources
+        bind: {}
+  airflow-scheduler:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/docker/airflow
+      dockerfile: Dockerfile
+    command:
+      - scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+        required: true
+      mysql:
+        condition: service_healthy
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - http://localhost:8974/health
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    image: penguins-airflow:latest
+    networks:
+      airflow-net: null
+      storage-net: null
+    restart: always
+    user: "50000:0"
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dags
+        target: /opt/airflow/dags
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/logs
+        target: /opt/airflow/logs
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/plugins
+        target: /opt/airflow/plugins
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dataset
+        target: /opt/airflow/dataset
+        bind: {}
+  airflow-triggerer:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/docker/airflow
+      dockerfile: Dockerfile
+    command:
+      - triggerer
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+        required: true
+      mysql:
+        condition: service_healthy
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    image: penguins-airflow:latest
+    networks:
+      airflow-net: null
+      storage-net: null
+    restart: always
+    user: "50000:0"
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dags
+        target: /opt/airflow/dags
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/logs
+        target: /opt/airflow/logs
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/plugins
+        target: /opt/airflow/plugins
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dataset
+        target: /opt/airflow/dataset
+        bind: {}
+  airflow-webserver:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/docker/airflow
+      dockerfile: Dockerfile
+    command:
+      - webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+        required: true
+      mysql:
+        condition: service_healthy
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - http://localhost:8080/health
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    image: penguins-airflow:latest
+    networks:
+      airflow-net: null
+      storage-net: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    restart: always
+    user: "50000:0"
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dags
+        target: /opt/airflow/dags
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/logs
+        target: /opt/airflow/logs
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/plugins
+        target: /opt/airflow/plugins
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dataset
+        target: /opt/airflow/dataset
+        bind: {}
+  airflow-worker:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/docker/airflow
+      dockerfile: Dockerfile
+    command:
+      - celery
+      - worker
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+        required: true
+      mysql:
+        condition: service_healthy
+        required: true
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+      AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+      DUMB_INIT_SETSID: "0"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    image: penguins-airflow:latest
+    networks:
+      airflow-net: null
+      storage-net: null
+    restart: always
+    user: "50000:0"
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dags
+        target: /opt/airflow/dags
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/logs
+        target: /opt/airflow/logs
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/plugins
+        target: /opt/airflow/plugins
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/dataset
+        target: /opt/airflow/dataset
+        bind: {}
+  api:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1
+      dockerfile: docker/api/Dockerfile
+    depends_on:
+      minio:
+        condition: service_healthy
+        required: true
+    environment:
+      MINIO_ACCESS_KEY: minio_user
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECRET_KEY: minio_password
+      MODELS_DIR: /app/models
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 15s
+    networks:
+      storage-net: null
+    ports:
+      - mode: ingress
+        target: 8000
+        published: "8989"
+        protocol: tcp
+    restart: always
+  jupyter:
+    build:
+      context: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1
+      dockerfile: docker/jupyter/Dockerfile
+    depends_on:
+      minio:
+        condition: service_healthy
+        required: true
+      mysql:
+        condition: service_healthy
+        required: true
+    environment:
+      JUPYTER_TOKEN: mlops12345
+      MINIO_ACCESS_KEY: minio_user
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECRET_KEY: minio_password
+      MYSQL_DATABASE: mydatabase
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: user1234
+      MYSQL_PORT: "3306"
+      MYSQL_USER: user
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -f http://localhost:8888/api/status || exit 1
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    networks:
+      jupyter-net: null
+    ports:
+      - mode: ingress
+        target: 8888
+        published: "8888"
+        protocol: tcp
+    restart: always
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/models
+        target: /app/models
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/report
+        target: /app/report
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/data
+        target: /app/data
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/results
+        target: /app/results
+        bind: {}
+  minio:
+    command:
+      - server
+      - /data
+      - --console-address
+      - :9001
+    environment:
+      MINIO_ROOT_PASSWORD: minio_password
+      MINIO_ROOT_USER: minio_user
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:9000/minio/health/live
+      timeout: 5s
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    image: minio/minio
+    networks:
+      jupyter-net: null
+      storage-net: null
+    ports:
+      - mode: ingress
+        target: 9000
+        published: "9000"
+        protocol: tcp
+      - mode: ingress
+        target: 9001
+        published: "9001"
+        protocol: tcp
+    restart: always
+    volumes:
+      - type: volume
+        source: minio_data
+        target: /data
+        volume: {}
+  mysql:
+    environment:
+      MYSQL_DATABASE: mydatabase
+      MYSQL_PASSWORD: user1234
+      MYSQL_ROOT_PASSWORD: admin1234
+      MYSQL_USER: user
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - -h
+        - localhost
+        - -u
+        - root
+        - -padmin1234
+      timeout: 5s
+      interval: 10s
+      retries: 5
+      start_period: 30s
+    image: mysql:8.0
+    networks:
+      airflow-net: null
+      jupyter-net: null
+    ports:
+      - mode: ingress
+        target: 3306
+        published: "3306"
+        protocol: tcp
+    volumes:
+      - type: volume
+        source: mysql_data
+        target: /var/lib/mysql
+        volume: {}
+      - type: bind
+        source: /mnt/c/Users/jhonn/OneDrive/Escritorio/Maestria/Operaciones de ML/Proyecto_1/MLOPs_Proyecto1/mysql-init
+        target: /docker-entrypoint-initdb.d
+        bind: {}
+  postgres:
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_USER: airflow
+    healthcheck:
+      test:
+        - CMD
+        - pg_isready
+        - -U
+        - airflow
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    image: postgres:13
+    networks:
+      airflow-net: null
+    restart: always
+    volumes:
+      - type: volume
+        source: postgres-db-volume
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    expose:
+      - "6379"
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 30s
+      interval: 10s
+      retries: 50
+      start_period: 30s
+    image: redis:latest
+    networks:
+      airflow-net: null
+    restart: always
+networks:
+  airflow-net:
+    name: docker_airflow-net
+  jupyter-net:
+    name: docker_jupyter-net
+  storage-net:
+    name: docker_storage-net
+volumes:
+  minio_data:
+    name: docker_minio_data
+  mysql_data:
+    name: docker_mysql_data
+  postgres-db-volume:
+    name: docker_postgres-db-volume
+x-airflow-common:
+  build:
+    context: airflow
+    dockerfile: Dockerfile
+  depends_on:
+    mysql:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  environment:
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__FERNET_KEY: ""
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW_CONN_MYSQL_DEFAULT: mysql://user:user1234@mysql:3306/mydatabase
+  image: penguins-airflow:latest
+  networks:
+    - airflow-net
+    - storage-net
+  user: "50000:0"
+  volumes:
+    - ../dags:/opt/airflow/dags
+    - ../logs:/opt/airflow/logs
+    - ../plugins:/opt/airflow/plugins
+    - ../dataset:/opt/airflow/dataset
