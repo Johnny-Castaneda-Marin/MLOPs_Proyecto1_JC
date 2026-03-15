@@ -246,3 +246,37 @@ docker compose exec airflow-webserver airflow dags list-runs -d forest_cover_pip
  ```text
 docker compose exec airflow-webserver airflow tasks states-for-dag-run forest_cover_pipeline 2026-03-15T03:46:46+00:00
  ```
+
+
+---
+pendiente
+•	conectar la extracción a la API real
+•	conocer el endpoint exacto y formato de respuesta
+•	mapear las columnas reales del dataset de forest cover
+•	capturar y registrar metadatos de batch
+•	usar la tabla training_ready_forest_cover si se requiere una capa final
+•	registrar métricas y modelos en model_registry
+•	integrar la API de inferencia con el modelo almacenado en MinIO
+•	ajustar entrenamiento a los datos reales del proyecto
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
