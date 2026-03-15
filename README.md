@@ -145,15 +145,10 @@ Objeto esperado:
 
 El DAG actual sigue esta secuencia:
 
-```bash
-extract_raw_data
-    ↓
-preprocess_data
-    ↓
-train_model
-    ↓
-upload_model_to_minio
-```
+<p align="center">
+  <img src="images/estructura.png" alt="Flujo del DAG" width="500"/>
+</p>
+
 Descripción de cada etapa
 A. extract_raw_data
   - obtiene datos desde dummy o API
