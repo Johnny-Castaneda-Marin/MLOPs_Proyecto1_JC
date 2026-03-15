@@ -78,3 +78,70 @@ MLOPs_Proyecto1/
 ├── pyproject.toml
 ```
 ---
+## 4. Componentes principales
+
+```text
+dags/forest_pipeline/forest_pipeline.py
+```
+
+Este DAG orquesta 4 tareas:
+
+- extract_raw_data
+- preprocess_data
+- train_model
+- upload_model_to_minio
+
+```text
+dags/forest_pipeline/src/config.py
+```
+Centraliza la configuración del pipeline:
+
+- conexión MySQL
+- nombres de tablas
+- URL base de la API
+- grupo asignado
+- configuración de MinIO
+- ruta local de modelos
+- modo dummy/API
+
+```text
+dags/forest_pipeline/src/extract_raw_forest_cover.py
+```
+Contiene la lógica de extracción.
+
+  Actualmente soporta dos modos:
+
+   - dummy: inserta un registro de prueba
+   - api: preparado para futura integración con la API real
+
+Mientras USE_API_SOURCE = False, la tarea usa datos dummy y los inserta en raw_forest_cover
+
+```text
+dags/forest_pipeline/src/preprocess_forest_cover.py
+```
+Lee raw_forest_cover, genera nuevas variables y guarda el resultado en processed_forest_cover.
+
+  Variables derivadas actuales:
+
+  - elevation_scaled
+  - slope_scaled
+  - hydrology_distance_ratio
+
+```text
+dags/forest_pipeline/src/train_models.py
+```
+Lee processed_forest_cover, entrena un RandomForestClassifier y guarda el modelo en: /opt/airflow/models/forest_cover_random_forest.pkl
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
