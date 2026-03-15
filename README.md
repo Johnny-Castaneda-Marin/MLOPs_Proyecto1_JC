@@ -130,18 +130,65 @@ Lee raw_forest_cover, genera nuevas variables y guarda el resultado en processed
 ```text
 dags/forest_pipeline/src/train_models.py
 ```
-Lee processed_forest_cover, entrena un RandomForestClassifier y guarda el modelo en: /opt/airflow/models/forest_cover_random_forest.pkl
+Lee processed_forest_cover, entrena un RandomForestClassifier y guarda el modelo en: 
+-  /opt/airflow/models/forest_cover_random_forest.pkl
 
-
-
-
-
-
-
-
-
-
-
-
+```text
+dags/forest_pipeline/src/upload_to_minio.py
+```
+Sube el modelo entrenado a MinIO
+Bucket actual:
+  - mlmodels
+Objeto esperado:
+  - forest_cover_random_forest.pkl
 
 ---
+
+## 5. Flujo del DAG
+
+El DAG actual sigue esta secuencia:
+
+```bash
+extract_raw_data
+    ↓
+preprocess_data
+    ↓
+train_model
+    ↓
+upload_model_to_minio
+```
+Descripción de cada etapa
+A. extract_raw_data
+  - obtiene datos desde dummy o API
+  - agrega metadatos como group_id e ingestion_ts
+  - inserta en raw_forest_cover
+B. preprocess_data
+  - lee los datos raw
+  - genera features derivadas
+  - elimina la columna id antes de insertar
+  - guarda en processed_forest_cover
+C. train_model
+  - separa X y y
+  - elimina columnas no entrenables (id, group_id, ingestion_ts)
+  - entrena Random Forest
+  - serializa el modelo con joblib
+D. upload_model_to_minio
+  - valida existencia del bucket
+  - lo crea si no existe
+  - sube el modelo a MinIO
+
+## 6. Tablas en MySQL
+
+Las tablas base del pipeline se definieron en:
+```text
+mysql-init/01_create_forest_tables.sql
+```
+
+Tablas creadas
+-	**raw_forest_cover** : Capa cruda del pipeline.
+-	**processed_forest_cover** : Capa transformada para entrenamiento.
+-	**training_ready_forest_cover** : Tabla reservada para una futura capa intermedia lista para entrenamiento.
+-	**model_registry** : Tabla reservada para registrar modelos y métricas.
+
+
+
