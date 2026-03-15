@@ -256,6 +256,7 @@ pendiente
 -	faltan imagenes de la api, modelos y dags
 -	falta documentacion de los volumenes
 -	persistencia de logs
+-	eliminar lo que no se necesite de los archivos
 
 
 
