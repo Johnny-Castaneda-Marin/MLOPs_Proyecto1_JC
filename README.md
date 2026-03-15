@@ -29,6 +29,10 @@ En la versión actual, el pipeline ya está preparado y funcionando con una **fu
 
 ## 2. Arquitectura actual
 
+<p align="center">
+  <img src="images/arquitectura.png" alt="arquitectura" width="500"/>
+</p>
+
 La arquitectura levantada actualmente incluye:
 
 - **PostgreSQL**: base interna de Airflow
