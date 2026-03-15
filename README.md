@@ -245,20 +245,27 @@ docker compose exec airflow-webserver airflow tasks states-for-dag-run forest_co
 
 ---
 pendiente
-•	conectar la extracción a la API real
-•	conocer el endpoint exacto y formato de respuesta
-•	mapear las columnas reales del dataset de forest cover
-•	capturar y registrar metadatos de batch
-•	usar la tabla training_ready_forest_cover si se requiere una capa final
-•	registrar métricas y modelos en model_registry
-•	integrar la API de inferencia con el modelo almacenado en MinIO
-•	ajustar entrenamiento a los datos reales del proyecto
+-	conectar la extracción a la API real
+-	conocer el endpoint exacto y formato de respuesta
+-	mapear las columnas reales del dataset de forest cover
+-	capturar y registrar metadatos de batch
+-	usar la tabla training_ready_forest_cover si se requiere una capa final
+-	registrar métricas y modelos en model_registry
+-	integrar la API de inferencia con el modelo almacenado en MinIO
+-	ajustar entrenamiento a los datos reales del proyecto
+-	faltan imagenes de la api, modelos y dags
+-	falta documentacion de los volumenes
+-	persistencia de logs
 
 
 
 
 
+## 👥 Colaboradores
 
+- 🧑‍💻 **Camilo Cortés** — [![GitHub](https://img.shields.io/badge/GitHub-@cccortesh95-181717?logo=github)](https://github.com/cccortesh95)
+- 🧑‍💻 **Johnny Castañeda** — [![GitHub](https://img.shields.io/badge/GitHub-@Johnny--Castaneda--Marin-181717?logo=github)](https://github.com/Johnny-Castaneda-Marin)
+- 🧑‍💻 **Benkos Triana** — [![GitHub](https://img.shields.io/badge/GitHub-@BenkosT-181717?logo=github)](https://github.com/BenkosT)
 
 
 
