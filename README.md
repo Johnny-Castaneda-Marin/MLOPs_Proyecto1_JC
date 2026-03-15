@@ -9,10 +9,7 @@
 - [7. Configuración actual](#7-configuración-actual)
 - [8. Cómo levantar el proyecto](#8-cómo-levantar-el-proyecto)
 - [9. Cómo ejecutar el DAG](#9-cómo-ejecutar-el-dag)
-- [10. Validaciones realizadas](#10-validaciones-realizadas)
-- [11. Problemas resueltos](#11-problemas-resueltos)
-- [12. Estado actual del proyecto](#12-estado-actual-del-proyecto)
-- [13. Trabajo pendiente](#13-trabajo-pendiente)
+
 
 ---
 
@@ -177,6 +174,9 @@ D. upload_model_to_minio
   - lo crea si no existe
   - sube el modelo a MinIO
 
+
+---
+
 ## 6. Tablas en MySQL
 
 Las tablas base del pipeline se definieron en:
@@ -191,4 +191,58 @@ Tablas creadas
 -	**model_registry** : Tabla reservada para registrar modelos y métricas.
 
 
+---
 
+## 7. Configuración actual
+
+**Base de datos MySQL**
+```text
+AIRFLOW_CONN_MYSQL_DEFAULT: 'mysql://user:user1234@mysql:3306/mydatabase'
+```
+**MinIO**
+-	MINIO_ENDPOINT = "minio:9000"
+-	MINIO_ACCESS_KEY = "minio_user"
+-	MINIO_SECRET_KEY = "minio_password"
+-	MINIO_BUCKET = "mlmodels"
+
+---
+
+## 8. Cómo levantar el proyecto
+Desde la carpeta docker/:
+
+  **A. Construir imagen de Airflow**
+  ```text
+    docker compose build airflow-webserver airflow-scheduler airflow-worker airflow-triggerer airflow-init
+  ```
+  **B. Levantar servicios**
+  ```text
+    docker compose up -d airflow-init airflow-webserver airflow-scheduler airflow-worker airflow-triggerer mysql minio postgres redis
+  ```
+  **C.Verificar estado**
+  ```text
+    docker compose ps
+  ```
+---
+
+## 9. Cómo ejecutar el DAG
+
+**Ver DAGs disponibles**
+ ```text
+docker compose exec airflow-webserver airflow dags list
+ ```
+**Despausar DAG si es necesario**
+ ```text
+docker compose exec airflow-webserver airflow dags unpause forest_cover_pipeline
+ ```
+**Lanzar ejecución manual**
+ ```text
+docker compose exec airflow-webserver airflow dags trigger forest_cover_pipeline
+ ```
+**Ver ejecuciones**
+ ```text
+docker compose exec airflow-webserver airflow dags list-runs -d forest_cover_pipeline
+ ```
+**Ver estado de tareas de una ejecución**
+ ```text
+docker compose exec airflow-webserver airflow tasks states-for-dag-run forest_cover_pipeline 2026-03-15T03:46:46+00:00
+ ```
