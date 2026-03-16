@@ -603,7 +603,7 @@ curl -X POST http://localhost:8989/predict/randomforest \
 Verificar que los modelos y el reporte están almacenados:
 
 <p align="center">
-  <img src="images/modelos_en_minio.png" alt="Prueba MinIO" width="600"/>
+  <img src="images/modelos_en _minio.png" alt="Prueba MinIO" width="600"/>
 </p>
 
 ---
