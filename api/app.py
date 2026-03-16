@@ -6,7 +6,6 @@ from utils.model_utils import (
     discover_models,
     load_metrics,
     load_model,
-    sync_from_minio,
 )
 from utils.logger import PredictionLogger
 from utils.schemas import ForestCoverInput
@@ -15,23 +14,9 @@ app = FastAPI(title="Forest Cover Type Classifier API")
 pred_logger = PredictionLogger()
 
 
-@app.on_event("startup")
-async def startup():
-    """Al iniciar, descarga modelos y reporte desde MinIO."""
-    sync_from_minio()
-
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.post("/sync")
-async def sync():
-    """Fuerza re-descarga de modelos desde MinIO."""
-    sync_from_minio()
-    available = discover_models()
-    return {"synced_models": list(available.keys())}
 
 
 def _build_features(data: ForestCoverInput) -> np.ndarray:
@@ -48,7 +33,7 @@ def _build_features(data: ForestCoverInput) -> np.ndarray:
 
 @app.get("/models")
 async def list_models():
-    """Lista todos los modelos disponibles con sus métricas."""
+    """Lista todos los modelos disponibles en MinIO con sus métricas."""
     available = discover_models()
     metrics = load_metrics()
     return {
@@ -65,7 +50,7 @@ async def list_models():
 
 @app.get("/report")
 async def get_report():
-    """Retorna el reporte completo de métricas de todos los modelos."""
+    """Retorna el reporte completo de métricas desde MinIO."""
     metrics = load_metrics()
     if not metrics:
         raise HTTPException(status_code=404, detail="No hay reporte de métricas disponible.")
@@ -89,7 +74,6 @@ async def predict(model_name: str, data: ForestCoverInput):
         raise HTTPException(status_code=500, detail=str(e))
 
     cover_name = COVER_TYPE_MAP.get(prediction, "Desconocido")
-
     result = {
         "model": model_name,
         "cover_type_id": prediction,
@@ -97,5 +81,4 @@ async def predict(model_name: str, data: ForestCoverInput):
     }
 
     pred_logger.log(data.model_dump(), result)
-
     return result

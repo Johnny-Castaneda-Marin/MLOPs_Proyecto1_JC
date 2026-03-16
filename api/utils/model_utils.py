@@ -1,5 +1,5 @@
+import io
 import os
-import glob
 
 import boto3
 import joblib
@@ -7,12 +7,11 @@ import pandas as pd
 from botocore.client import Config
 
 
-MODELS_DIR = os.environ.get("MODELS_DIR", "/app/models")
-REPORT_PATH = os.path.join(MODELS_DIR, "model_metrics.csv")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minio_user")
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minio1234")
 MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "mlmodels")
+REPORT_KEY = "model_metrics.csv"
 
 COVER_TYPE_MAP = {
     1: "Spruce/Fir",
@@ -37,44 +36,36 @@ def _get_s3_client():
     )
 
 
-def sync_from_minio():
-    """Descarga todos los .pkl y el reporte CSV desde MinIO a MODELS_DIR."""
-    os.makedirs(MODELS_DIR, exist_ok=True)
+def discover_models() -> dict:
+    """Lista los modelos .pkl disponibles directamente en MinIO."""
+    models = {}
     try:
         s3 = _get_s3_client()
         response = s3.list_objects_v2(Bucket=MINIO_BUCKET)
         for obj in response.get("Contents", []):
             key = obj["Key"]
-            # Usar solo el nombre del archivo, ignorar subdirectorios en MinIO
-            filename = os.path.basename(key)
-            local_path = os.path.join(MODELS_DIR, filename)
-            s3.download_file(MINIO_BUCKET, key, local_path)
-            print(f"Descargado: {key} → {local_path}")
+            if key.endswith("_model.pkl") or key.endswith("_pipeline.pkl"):
+                name = key.replace("_pipeline.pkl", "").replace("_model.pkl", "").lower()
+                models[name] = key  # guardamos la key de MinIO, no una ruta local
     except Exception as e:
-        print(f"Error sincronizando desde MinIO: {e}")
-
-
-def discover_models():
-    """Descubre dinámicamente los modelos .pkl disponibles en disco."""
-    models = {}
-    for pattern in ["*_pipeline.pkl", "*_model.pkl"]:
-        for path in glob.glob(os.path.join(MODELS_DIR, pattern)):
-            filename = os.path.basename(path)
-            name = filename.replace("_pipeline.pkl", "").replace("_model.pkl", "").lower()
-            if name not in models:
-                models[name] = path
+        print(f"Error listando modelos en MinIO: {e}")
     return models
 
 
-def load_model(path):
-    """Carga un modelo serializado desde disco."""
-    return joblib.load(path)
+def load_model(minio_key: str):
+    """Descarga y deserializa un modelo desde MinIO en memoria."""
+    s3 = _get_s3_client()
+    response = s3.get_object(Bucket=MINIO_BUCKET, Key=minio_key)
+    buffer = io.BytesIO(response["Body"].read())
+    return joblib.load(buffer)
 
 
 def load_metrics() -> dict:
-    """Carga el reporte CSV de métricas si existe."""
-    if os.path.exists(REPORT_PATH):
-        df = pd.read_csv(REPORT_PATH)
+    """Descarga y parsea el reporte CSV de métricas desde MinIO."""
+    try:
+        s3 = _get_s3_client()
+        response = s3.get_object(Bucket=MINIO_BUCKET, Key=REPORT_KEY)
+        df = pd.read_csv(io.BytesIO(response["Body"].read()))
         return {
             row["model"]: {
                 "train_accuracy": row["train_accuracy"],
@@ -85,7 +76,8 @@ def load_metrics() -> dict:
             }
             for _, row in df.iterrows()
         }
-    return {}
+    except Exception:
+        return {}
 
 
 def is_pipeline(model):

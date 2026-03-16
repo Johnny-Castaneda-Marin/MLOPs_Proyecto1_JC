@@ -1,9 +1,9 @@
 """
-Clase encargada de entrenar modelos, guardarlos localmente y en MinIO,
-mostrar métricas visuales y actualizar el reporte.
+Clase encargada de entrenar modelos, subirlos directamente a MinIO en memoria,
+mostrar métricas visuales y actualizar el reporte CSV también en memoria.
+No se escribe nada en disco local.
 """
 
-import os
 import io
 import joblib
 import pandas as pd
@@ -23,22 +23,18 @@ from sklearn.pipeline import Pipeline
 
 
 class ModelTrainer:
-    """Entrena pipelines de sklearn, los persiste local y en MinIO, y mantiene el reporte."""
+    """Entrena pipelines de sklearn, los persiste en MinIO (en memoria) y mantiene el reporte."""
 
     def __init__(
         self,
-        models_dir: str = "/app/models",
-        report_path: str = "/app/report/model_metrics.csv",
         minio_endpoint: str = None,
         minio_access_key: str = None,
         minio_secret_key: str = None,
         minio_bucket: str = "mlmodels",
+        report_key: str = "model_metrics.csv",
     ):
-        self.models_dir = models_dir
-        self.report_path = report_path
         self.minio_bucket = minio_bucket
-        os.makedirs(models_dir, exist_ok=True)
-        os.makedirs(os.path.dirname(report_path), exist_ok=True)
+        self.report_key = report_key
 
         # Configurar cliente MinIO (S3)
         self.s3 = None
@@ -51,11 +47,22 @@ class ModelTrainer:
                 config=Config(signature_version="s3v4"),
                 region_name="us-east-1",
             )
+            self._ensure_bucket()
+
+    def _ensure_bucket(self):
+        """Crea el bucket en MinIO si no existe."""
+        try:
+            existing = [b["Name"] for b in self.s3.list_buckets().get("Buckets", [])]
+            if self.minio_bucket not in existing:
+                self.s3.create_bucket(Bucket=self.minio_bucket)
+                print(f"Bucket '{self.minio_bucket}' creado en MinIO")
+        except Exception as e:
+            print(f"ERROR al verificar/crear bucket: {e}")
 
     def train_and_save(self, name: str, estimator, X_train, X_test, y_train, y_test, scaler=None):
         """
         Construye un Pipeline, entrena, evalúa, muestra métricas,
-        guarda el pipeline local y en MinIO, y actualiza el reporte CSV.
+        serializa en memoria y sube directamente a MinIO.
 
         Parámetros
         ----------
@@ -75,17 +82,12 @@ class ModelTrainer:
         metrics = self._evaluate(pipeline, name, X_train, X_test, y_train, y_test)
         self._show_report(pipeline, name, X_test, y_test)
 
-        # Guardar pipeline localmente
+        # Serializar en memoria y subir a MinIO
         filename = f"{name.lower()}_model.pkl"
-        model_path = os.path.join(self.models_dir, filename)
-        joblib.dump(pipeline, model_path)
-        print(f"\nPipeline '{name}' guardado en {model_path}")
-
-        # Subir a MinIO
         if self.s3:
-            self._upload_to_minio(model_path, filename)
+            self._upload_model_to_minio(pipeline, filename)
 
-        # Actualizar reporte
+        # Actualizar reporte en MinIO (en memoria)
         self._update_report(metrics)
 
         return metrics
@@ -126,30 +128,56 @@ class ModelTrainer:
         plt.tight_layout()
         plt.show()
 
-    def _upload_to_minio(self, local_path: str, object_name: str):
-        """Sube el archivo a MinIO, creando el bucket si no existe."""
+    def _upload_model_to_minio(self, pipeline, object_name: str):
+        """Serializa el pipeline en memoria y lo sube a MinIO sin escribir en disco."""
         try:
-            existing = [b["Name"] for b in self.s3.list_buckets().get("Buckets", [])]
-            if self.minio_bucket not in existing:
-                self.s3.create_bucket(Bucket=self.minio_bucket)
-                print(f"Bucket '{self.minio_bucket}' creado en MinIO")
-
-            self.s3.upload_file(local_path, self.minio_bucket, object_name)
+            buffer = io.BytesIO()
+            joblib.dump(pipeline, buffer)
+            buffer.seek(0)
+            self.s3.put_object(
+                Bucket=self.minio_bucket,
+                Key=object_name,
+                Body=buffer.getvalue(),
+            )
             print(f"Pipeline subido a MinIO: s3://{self.minio_bucket}/{object_name}")
         except Exception as e:
-            print(f"ERROR al subir a MinIO: {e}")
+            print(f"ERROR al subir modelo a MinIO: {e}")
 
     def _update_report(self, metrics: dict):
-        """Actualiza el reporte CSV de métricas (reemplaza si el modelo ya existe)."""
-        if os.path.exists(self.report_path):
-            df = pd.read_csv(self.report_path)
-        else:
-            df = pd.DataFrame()
+        """
+        Descarga el reporte CSV actual de MinIO (si existe), actualiza en memoria
+        y lo vuelve a subir. No se escribe nada en disco.
+        """
+        if not self.s3:
+            return
 
+        # Intentar descargar el reporte existente
+        df = pd.DataFrame()
+        try:
+            response = self.s3.get_object(Bucket=self.minio_bucket, Key=self.report_key)
+            df = pd.read_csv(io.BytesIO(response["Body"].read()))
+        except self.s3.exceptions.NoSuchKey:
+            pass  # Primera vez, el reporte no existe aún
+        except Exception:
+            pass  # Si falla por cualquier otra razón, empezamos con df vacío
+
+        # Reemplazar fila del modelo si ya existe
         model_name = metrics["model"]
         if not df.empty and "model" in df.columns:
             df = df[df["model"] != model_name]
 
         df = pd.concat([df, pd.DataFrame([metrics])], ignore_index=True)
-        df.to_csv(self.report_path, index=False)
-        print(f"Reporte actualizado en {self.report_path}")
+
+        # Subir reporte actualizado a MinIO en memoria
+        try:
+            buffer = io.BytesIO()
+            df.to_csv(buffer, index=False)
+            buffer.seek(0)
+            self.s3.put_object(
+                Bucket=self.minio_bucket,
+                Key=self.report_key,
+                Body=buffer.getvalue(),
+            )
+            print(f"Reporte actualizado en MinIO: s3://{self.minio_bucket}/{self.report_key}")
+        except Exception as e:
+            print(f"ERROR al subir reporte a MinIO: {e}")
