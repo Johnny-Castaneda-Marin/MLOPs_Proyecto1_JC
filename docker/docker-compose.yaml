@@ -6,7 +6,8 @@ x-airflow-common:
     dockerfile: Dockerfile
   networks:
     - airflow-net
-    - storage-net
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -361,6 +362,7 @@ volumes:
   minio_data:
 
 networks:
-  airflow-net:    # Airflow + postgres + redis + mysql
+  airflow-net:    # Airflow + postgres + redis + mysql (con acceso a internet)
+    driver: bridge
   storage-net:    # api + minio
   jupyter-net:    # jupyter + mysql + minio
