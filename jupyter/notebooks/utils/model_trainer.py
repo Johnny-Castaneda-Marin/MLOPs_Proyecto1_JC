@@ -104,9 +104,9 @@ class ModelTrainer:
             "model": name.lower(),
             "train_accuracy": round(accuracy_score(y_train, y_train_pred), 4),
             "test_accuracy": round(accuracy_score(y_test, y_test_pred), 4),
-            "test_precision": round(precision_score(y_test, y_test_pred, average="weighted"), 4),
-            "test_recall": round(recall_score(y_test, y_test_pred, average="weighted"), 4),
-            "test_f1": round(f1_score(y_test, y_test_pred, average="weighted"), 4),
+            "test_precision": round(precision_score(y_test, y_test_pred, average="weighted", zero_division=0), 4),
+            "test_recall": round(recall_score(y_test, y_test_pred, average="weighted", zero_division=0), 4),
+            "test_f1": round(f1_score(y_test, y_test_pred, average="weighted", zero_division=0), 4),
         }
 
     def _show_report(self, pipeline, name, X_test, y_test):
@@ -115,7 +115,7 @@ class ModelTrainer:
         print(f"\n{'='*50}")
         print(f"  {name} — Classification Report")
         print(f"{'='*50}")
-        print(classification_report(y_test, y_pred))
+        print(classification_report(y_test, y_pred, zero_division=0))
 
         cm = confusion_matrix(y_test, y_pred)
         plt.figure(figsize=(8, 6))
