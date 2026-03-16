@@ -233,7 +233,7 @@ graph TB
 ### Comunicación entre servicios
 
 - Los servicios de Airflow se comunican con MySQL a través de `airflow-net` usando `MySqlHook`.
-- Para alcanzar la API externa del proyecto (puerto 8090 en el host), los contenedores de Airflow usan `extra_hosts: host.docker.internal:host-gateway`.
+- Para alcanzar la API externa del proyecto (puerto 8090 en el host), los contenedores de Airflow usan `extra_hosts: host.docker.internal:host-gateway`. Esto es necesario porque los contenedores Docker viven en redes aisladas y no pueden acceder directamente a servicios que corren en la máquina host. La directiva `extra_hosts` agrega una entrada en `/etc/hosts` del contenedor que resuelve `host.docker.internal` a la IP del gateway del host, permitiendo que el Worker de Airflow llame a `http://host.docker.internal:8090` como si fuera un hostname normal.
 - MySQL está en dos redes (`airflow-net` y `jupyter-net`) para que tanto Airflow como Jupyter puedan acceder.
 - MinIO está en `storage-net` y `jupyter-net` para ser accesible desde la API y Jupyter.
 
