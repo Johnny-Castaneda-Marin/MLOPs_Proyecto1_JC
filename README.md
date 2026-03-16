@@ -380,7 +380,7 @@ Matriz de confusión:
 Modelos en MinIO:
 
 <p align="center">
-  <img src="images/modelso_minio.png" alt="Modelos en MinIO" width="600"/>
+  <img src="images/modelos_en _minio.png" alt="Modelos en MinIO" width="600"/>
 </p>
 
 ---
@@ -410,6 +410,10 @@ api:
 La API corre internamente en el puerto 8000 y se expone en el puerto 8989 del host. Todos los modelos y el reporte de métricas se leen directamente desde MinIO en cada request, sin almacenamiento local.
 
 ### 8.2 Estructura
+
+<p align="center">
+  <img src="images/api_grupo_5.png" alt="Modelos en MinIO" width="600"/>
+</p>
 
 ```
 api/
@@ -484,11 +488,6 @@ Predicción exitosa:
   <img src="images/api_prediccion.png" alt="API predicción" width="600"/>
 </p>
 
-Reporte de métricas:
-
-<p align="center">
-  <img src="images/api_reporte.png" alt="API reporte" width="600"/>
-</p>
 
 ---
 
