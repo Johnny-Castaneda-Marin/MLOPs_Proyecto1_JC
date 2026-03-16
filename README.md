@@ -314,7 +314,7 @@ DAG ejecutado correctamente:
 Datos en `raw_forest_cover` (55 columnas one-hot):
 
 <div align="center">
-  <img src="images/conexion_bbdd.png" alt="workflow" width="900">
+  <img src="images/conexion_bbdd.png" alt="workflow" width="700">
 </div>
 
 
@@ -327,7 +327,7 @@ Datos en `processed_forest_cover` (13 columnas categóricas):
 Registros en `batch_log` (deduplicación):
 
 <p align="center">
-  <img src="images/batch_log.png" alt="Batch log" width="600"/>
+  <img src="images/batch_log.png" alt="Batch log" width="700"/>
 </p>
 
 ---
@@ -380,7 +380,7 @@ Matriz de confusión:
 Modelos en MinIO:
 
 <p align="center">
-  <img src="images/minio_modelos.png" alt="Modelos en MinIO" width="600"/>
+  <img src="images/modelso_minio.png" alt="Modelos en MinIO" width="600"/>
 </p>
 
 ---
