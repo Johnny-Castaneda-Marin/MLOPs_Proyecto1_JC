@@ -71,7 +71,7 @@ jupyter-net
 │       └── src/
 │           ├── config.py                   # Configuración centralizada
 │           ├── extract_raw_forest_cover.py # Extracción desde API → raw_forest_cover
-│           └── preprocess_forest_cover.py  # Procesamiento one-hot → categórico
+│           └── process_data.py             # Procesamiento one-hot → categórico
 │
 ├── docker/
 │   ├── airflow/Dockerfile                  # Imagen de Airflow

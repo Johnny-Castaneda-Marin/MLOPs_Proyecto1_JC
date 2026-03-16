@@ -73,9 +73,7 @@ CREATE TABLE IF NOT EXISTS processed_forest_cover (
     horizontal_distance_to_fire_points INT,
     wilderness_area VARCHAR(50),
     soil_type VARCHAR(10),
-    cover_type INT,
-    group_id VARCHAR(20),
-    ingestion_ts DATETIME
+    cover_type INT
 );
 
 CREATE TABLE IF NOT EXISTS batch_log (

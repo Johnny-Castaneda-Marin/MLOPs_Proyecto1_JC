@@ -4,7 +4,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
 
 from forest_pipeline.src.extract_raw_forest_cover import extract_raw_forest_cover
-from forest_pipeline.src.preprocess_forest_cover import preprocess_forest_cover
+from forest_pipeline.src.process_data import preprocess_forest_cover
 
 
 with DAG(

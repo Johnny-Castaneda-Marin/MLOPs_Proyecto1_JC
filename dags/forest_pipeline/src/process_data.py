@@ -56,8 +56,8 @@ def preprocess_forest_cover() -> None:
     # Decodificar one-hot → columnas categóricas
     df = _decode_onehot(df)
 
-    # Columnas finales: continuas + wilderness_area + soil_type + cover_type + metadatos
-    processed_cols = CONTINUOUS_COLUMNS + ["wilderness_area", "soil_type", "cover_type", "group_id", "ingestion_ts"]
+    # Columnas finales: continuas + wilderness_area + soil_type + cover_type
+    processed_cols = CONTINUOUS_COLUMNS + ["wilderness_area", "soil_type", "cover_type"]
     df = df[processed_cols]
 
     df.to_sql(name=PROCESSED_TABLE, con=engine, if_exists="append", index=False)
