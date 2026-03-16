@@ -549,7 +549,7 @@ docker compose exec mysql mysql -u user -puser1234 mydatabase -e "SELECT * FROM 
 ```
 
 <p align="center">
-  <img src="images/prueba_dag.png" alt="Prueba DAG" width="600"/>
+  <img src="images/ejecucion_del_dag .png" alt="Prueba DAG" width="600"/>
 </p>
 
 ### 10.2 Entrenamiento (Jupyter)
@@ -603,7 +603,7 @@ curl -X POST http://localhost:8989/predict/randomforest \
 Verificar que los modelos y el reporte están almacenados:
 
 <p align="center">
-  <img src="images/prueba_minio.png" alt="Prueba MinIO" width="600"/>
+  <img src="images/modelos_en_minio.png" alt="Prueba MinIO" width="600"/>
 </p>
 
 ---
