@@ -6,7 +6,7 @@ WORKDIR /app
 
 RUN uv init --no-readme && \
     uv add jupyterlab pandas numpy scikit-learn matplotlib seaborn joblib \
-           mysql-connector-python boto3
+           mysql-connector-python sqlalchemy boto3
 
 RUN mkdir -p /app/models
 

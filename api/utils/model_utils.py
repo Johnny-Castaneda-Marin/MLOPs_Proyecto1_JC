@@ -45,7 +45,9 @@ def sync_from_minio():
         response = s3.list_objects_v2(Bucket=MINIO_BUCKET)
         for obj in response.get("Contents", []):
             key = obj["Key"]
-            local_path = os.path.join(MODELS_DIR, key)
+            # Usar solo el nombre del archivo, ignorar subdirectorios en MinIO
+            filename = os.path.basename(key)
+            local_path = os.path.join(MODELS_DIR, filename)
             s3.download_file(MINIO_BUCKET, key, local_path)
             print(f"Descargado: {key} → {local_path}")
     except Exception as e:
