@@ -2,16 +2,19 @@
 
 ## Tabla de Contenidos
 
-- [1. Estructura del Proyecto](#1-estructura-del-proyecto)
-- [2. Creación de Dockerfiles custom](#2-creación-de-dockerfiles-custom)
-- [3. Servicio MySQL en Docker Compose](#3-servicio-mysql-en-docker-compose)
-- [4. Script de inicialización de BD](#4-script-de-inicialización-de-bd)
-- [5. Arquitectura Docker Compose](#5-arquitectura-docker-compose)
-- [6. DAG: forest_cover_pipeline](#6-dag-forest_cover_pipeline)
-- [7. Entrenamiento en Jupyter](#7-entrenamiento-en-jupyter)
-- [8. API de inferencia](#8-api-de-inferencia)
-- [9. Cómo levantar el proyecto](#9-cómo-levantar-el-proyecto)
-- [10. Pruebas de funcionamiento](#10-pruebas-de-funcionamiento)
+## Tabla de Contenidos
+
+- [📁 1. Estructura del Proyecto](#1-estructura-del-proyecto)
+- [🐳 2. Creación de Dockerfiles custom](#2-creación-de-dockerfiles-custom)
+- [🗄️ 3. Servicio MySQL en Docker Compose](#3-servicio-mysql-en-docker-compose)
+- [🧱 4. Script de inicialización de BD](#4-script-de-inicialización-de-bd)
+- [🏗️ 5. Arquitectura Docker Compose](#5-arquitectura-docker-compose)
+- [🌲 6. DAG: forest_cover_pipeline](#6-dag-forest_cover_pipeline)
+- [📓 7. Entrenamiento en Jupyter](#7-entrenamiento-en-jupyter)
+- [⚡ 8. API de inferencia](#8-api-de-inferencia)
+- [🚀 9. Cómo levantar el proyecto](#9-cómo-levantar-el-proyecto)
+- [✅ 10. Pruebas de funcionamiento](#10-pruebas-de-funcionamiento)
+- [👥 11. Colaboradores](#-colaboradores)
 
 ---
 
