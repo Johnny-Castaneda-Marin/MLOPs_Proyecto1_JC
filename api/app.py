@@ -48,14 +48,6 @@ async def list_models():
     }
 
 
-@app.get("/report")
-async def get_report():
-    """Retorna el reporte completo de métricas desde MinIO."""
-    metrics = load_metrics()
-    if not metrics:
-        raise HTTPException(status_code=404, detail="No hay reporte de métricas disponible.")
-    return {"report": metrics}
-
 
 @app.post("/predict/{model_name}")
 async def predict(model_name: str, data: ForestCoverInput):

@@ -387,8 +387,6 @@ api/
 
 **`GET /models`** — Lista los modelos disponibles en MinIO con sus métricas. Consulta el bucket `mlmodels` en cada llamada.
 
-**`GET /report`** — Retorna el reporte completo de métricas leyendo `model_metrics.csv` directamente desde MinIO.
-
 **`POST /predict/{model_name}`** — Recibe las 12 features de Forest Cover (10 continuas + wilderness_area + soil_type codificados), descarga el modelo desde MinIO en memoria, ejecuta la predicción y retorna el tipo de cobertura.
 
 ### 8.4 Validación de campos
