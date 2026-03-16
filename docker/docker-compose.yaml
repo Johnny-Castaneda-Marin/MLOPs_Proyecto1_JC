@@ -1,6 +1,6 @@
 x-airflow-common:
   &airflow-common
-  image: ${AIRFLOW_IMAGE_NAME:-penguins-airflow:latest}
+  image: ${AIRFLOW_IMAGE_NAME:-forest-airflow:latest}
   build:
     context: airflow
     dockerfile: Dockerfile
