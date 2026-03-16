@@ -233,3 +233,6 @@ dags/__pycache__/
 dags/**/__pycache__/
 
 .kiro/
+
+# PDFs
+*.pdf

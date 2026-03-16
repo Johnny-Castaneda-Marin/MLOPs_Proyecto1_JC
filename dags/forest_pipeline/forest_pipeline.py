@@ -5,8 +5,6 @@ from airflow.operators.python import PythonOperator, ShortCircuitOperator
 
 from forest_pipeline.src.extract_raw_forest_cover import extract_raw_forest_cover
 from forest_pipeline.src.preprocess_forest_cover import preprocess_forest_cover
-# from forest_pipeline.src.train_models import train_forest_models
-# from forest_pipeline.src.upload_to_minio import upload_model_to_minio
 
 
 with DAG(
@@ -28,15 +26,4 @@ with DAG(
         python_callable=preprocess_forest_cover,
     )
 
-    # train_model = PythonOperator(
-    #     task_id="train_model",
-    #     python_callable=train_forest_models,
-    # )
-
-    # upload_model = PythonOperator(
-    #     task_id="upload_model_to_minio",
-    #     python_callable=upload_model_to_minio,
-    # )
-
     extract_raw_data >> preprocess_data
-    # preprocess_data >> train_model >> upload_model
