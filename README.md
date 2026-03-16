@@ -1,289 +1,207 @@
 ## Tabla de contenido
 
 - [1. Objetivo del proyecto](#1-objetivo-del-proyecto)
-- [2. Arquitectura actual](#2-arquitectura-actual)
+- [2. Arquitectura Docker Compose](#2-arquitectura-docker-compose)
 - [3. Estructura del proyecto](#3-estructura-del-proyecto)
-- [4. Componentes principales](#4-componentes-principales)
-- [5. Flujo del DAG](#5-flujo-del-dag)
-- [6. Tablas en MySQL](#6-tablas-en-mysql)
-- [7. Configuración actual](#7-configuración-actual)
-- [8. Cómo levantar el proyecto](#8-cómo-levantar-el-proyecto)
-- [9. Cómo ejecutar el DAG](#9-cómo-ejecutar-el-dag)
-
+- [4. Inicialización de MySQL](#4-inicialización-de-mysql)
+- [5. DAG: forest_cover_pipeline](#5-dag-forest_cover_pipeline)
+- [6. Configuración](#6-configuración)
+- [7. Cómo levantar el proyecto](#7-cómo-levantar-el-proyecto)
+- [8. Cómo ejecutar el DAG](#8-cómo-ejecutar-el-dag)
 
 ---
 
 ## 1. Objetivo del proyecto
 
-Construir un pipeline de Machine Learning para el problema de **Forest Cover Type**, usando una arquitectura MLOps con:
-
-- **Airflow** para la orquestación
-- **MySQL** para almacenamiento de datos por capas
-- **MinIO** para persistencia de modelos
-- **FastAPI** para inferencia
-- **API externa** como fuente de datos del proyecto
-
-En la versión actual, el pipeline ya está preparado y funcionando con una **fuente dummy**, mientras se obtiene acceso a la API real.
+Pipeline MLOps para el dataset **Forest Cover Type** que ingesta datos desde una API externa, los almacena en crudo (55 columnas one-hot), los procesa a formato categórico y los deja listos para entrenamiento.
 
 ---
 
-## 2. Arquitectura actual
+## 2. Arquitectura Docker Compose
 
-<p align="center">
-  <img src="images/arquitectura.png" alt="arquitectura" width="500"/>
-</p>
+El archivo `docker/docker-compose.yaml` define tres redes aisladas que segmentan los servicios:
 
-La arquitectura levantada actualmente incluye:
+```
+airflow-net (bridge, con acceso a internet)
+├── PostgreSQL       — base de datos interna de Airflow (metadatos, DAG runs)
+├── Redis            — broker de mensajes para Celery
+├── Airflow Webserver — UI en puerto 8080
+├── Airflow Scheduler — planificación de DAGs
+├── Airflow Worker   — ejecución de tareas vía Celery
+├── Airflow Triggerer — triggers asincrónicos
+├── Airflow Init     — migración de BD y creación de usuario admin
+└── MySQL            — almacenamiento del pipeline (raw, processed, batch_log)
 
-- **PostgreSQL**: base interna de Airflow
-- **Redis**: broker de Celery
-- **Airflow Webserver**
-- **Airflow Scheduler**
-- **Airflow Worker**
-- **Airflow Triggerer**
-- **MySQL**: almacenamiento del pipeline
-- **MinIO**: almacenamiento de modelos
-- **Jupyter**: entorno de exploración
-- **API**: servicio de inferencia existente en el proyecto
+storage-net
+├── MinIO            — almacenamiento de objetos (modelos) en puertos 9000/9001
+└── API              — servicio FastAPI de inferencia en puerto 8989
+
+jupyter-net
+├── Jupyter          — notebooks de exploración en puerto 8888
+├── MySQL            — compartido con airflow-net
+└── MinIO            — compartido con storage-net
+```
+
+### Comunicación entre servicios
+
+- Los servicios de Airflow se comunican con MySQL a través de `airflow-net` usando la conexión `mysql://user:user1234@mysql:3306/mydatabase`
+- Para alcanzar la API externa (que corre en el host en el puerto 8090), los contenedores de Airflow usan `extra_hosts: host.docker.internal:host-gateway`
+- MySQL está en dos redes (`airflow-net` y `jupyter-net`) para que tanto Airflow como Jupyter puedan acceder
+- MinIO está en `storage-net` y `jupyter-net` para ser accesible desde la API y Jupyter
+
+### Volúmenes
+
+| Volumen | Uso |
+|---|---|
+| `postgres-db-volume` | Persistencia de metadatos de Airflow |
+| `mysql_data` | Persistencia de tablas del pipeline |
+| `minio_data` | Persistencia de objetos/modelos |
+| `../dags` → `/opt/airflow/dags` | Código de los DAGs (montado) |
+| `../logs` → `/opt/airflow/logs` | Logs de ejecución de Airflow |
+| `../mysql-init` → `/docker-entrypoint-initdb.d` | Scripts SQL de inicialización |
 
 ---
 
 ## 3. Estructura del proyecto
 
-```bash
-MLOPs_Proyecto1/
-│
+```
 ├── dags/
-│   ├── penguins_pipeline/
-│   │   └── ...                 # pipeline anterior del proyecto
-│   │
 │   └── forest_pipeline/
-│       ├── __init__.py
-│       ├── forest_pipeline.py
+│       ├── forest_pipeline.py              # Definición del DAG
 │       └── src/
-│           ├── __init__.py
-│           ├── config.py
-│           ├── extract_raw_forest_cover.py
-│           ├── preprocess_forest_cover.py
-│           ├── train_models.py
-│           └── upload_to_minio.py
+│           ├── config.py                   # Configuración centralizada
+│           ├── extract_raw_forest_cover.py # Extracción desde API → raw_forest_cover
+│           └── preprocess_forest_cover.py  # Procesamiento one-hot → categórico
 │
 ├── docker/
-│   ├── airflow/
-│   │   └── Dockerfile
-│   └── docker-compose.yml
+│   ├── airflow/Dockerfile                  # Imagen de Airflow
+│   ├── api/Dockerfile                      # Imagen de la API de inferencia
+│   ├── jupyter/Dockerfile                  # Imagen de Jupyter
+│   └── docker-compose.yaml                 # Orquestación de servicios
 │
 ├── mysql-init/
-│   └── 01_create_forest_tables.sql
+│   └── create_forest_tables.sql            # DDL de tablas del pipeline
 │
-├── pyproject.toml
+├── api/                                    # Código de la API de inferencia
+├── jupyter/notebooks/                      # Notebooks de exploración
+├── models/                                 # Modelos entrenados (runtime)
+├── data/                                   # Datos generados (runtime)
+└── logs/                                   # Logs de Airflow (runtime)
 ```
----
-## 4. Componentes principales
-
-```text
-dags/forest_pipeline/forest_pipeline.py
-```
-
-Este DAG orquesta 4 tareas:
-
-- extract_raw_data
-- preprocess_data
-- train_model
-- upload_model_to_minio
-
-```text
-dags/forest_pipeline/src/config.py
-```
-Centraliza la configuración del pipeline:
-
-- conexión MySQL
-- nombres de tablas
-- URL base de la API
-- grupo asignado
-- configuración de MinIO
-- ruta local de modelos
-- modo dummy/API
-
-```text
-dags/forest_pipeline/src/extract_raw_forest_cover.py
-```
-Contiene la lógica de extracción.
-
-  Actualmente soporta dos modos:
-
-   - dummy: inserta un registro de prueba
-   - api: preparado para futura integración con la API real
-
-Mientras USE_API_SOURCE = False, la tarea usa datos dummy y los inserta en raw_forest_cover
-
-```text
-dags/forest_pipeline/src/preprocess_forest_cover.py
-```
-Lee raw_forest_cover, genera nuevas variables y guarda el resultado en processed_forest_cover.
-
-  Variables derivadas actuales:
-
-  - elevation_scaled
-  - slope_scaled
-  - hydrology_distance_ratio
-
-```text
-dags/forest_pipeline/src/train_models.py
-```
-Lee processed_forest_cover, entrena un RandomForestClassifier y guarda el modelo en: 
--  /opt/airflow/models/forest_cover_random_forest.pkl
-
-```text
-dags/forest_pipeline/src/upload_to_minio.py
-```
-Sube el modelo entrenado a MinIO
-Bucket actual:
-  - mlmodels
-Objeto esperado:
-  - forest_cover_random_forest.pkl
 
 ---
 
-## 5. Flujo del DAG
+## 4. Inicialización de MySQL
 
-El DAG actual sigue esta secuencia:
+El archivo `mysql-init/create_forest_tables.sql` se monta en `/docker-entrypoint-initdb.d` del contenedor MySQL. Docker ejecuta automáticamente estos scripts la primera vez que se crea el volumen.
 
-<p align="center">
-  <img src="images/estructura.png" alt="Flujo del DAG" width="500"/>
-</p>
+### Tablas creadas
 
-Descripción de cada etapa
-A. extract_raw_data
-  - obtiene datos desde dummy o API
-  - agrega metadatos como group_id e ingestion_ts
-  - inserta en raw_forest_cover
-B. preprocess_data
-  - lee los datos raw
-  - genera features derivadas
-  - elimina la columna id antes de insertar
-  - guarda en processed_forest_cover
-C. train_model
-  - separa X y y
-  - elimina columnas no entrenables (id, group_id, ingestion_ts)
-  - entrena Random Forest
-  - serializa el modelo con joblib
-D. upload_model_to_minio
-  - valida existencia del bucket
-  - lo crea si no existe
-  - sube el modelo a MinIO
+**`raw_forest_cover`** — Capa cruda. Almacena las 55 columnas tal como vienen de la API:
+- 10 columnas continuas (elevation, aspect, slope, distancias, hillshades)
+- 4 columnas one-hot de wilderness_area
+- 40 columnas one-hot de soil_type
+- 1 columna cover_type
+- Metadatos: group_id, ingestion_ts
 
+**`processed_forest_cover`** — Capa procesada. Las 44 columnas one-hot se decodifican a 2 columnas categóricas:
+- 10 columnas continuas (mismas que raw)
+- wilderness_area (VARCHAR) — nombre del área
+- soil_type (VARCHAR) — tipo de suelo
+- cover_type
+- Metadatos: group_id, ingestion_ts
+
+**`batch_log`** — Control de deduplicación. Registra cada batch ingestado con una restricción UNIQUE sobre (batch_number, group_number) para evitar cargas duplicadas.
+
+> Si necesitas recrear las tablas (por cambios en el esquema), debes eliminar el volumen de MySQL:
+> ```bash
+> docker compose -f docker/docker-compose.yaml down -v
+> docker compose -f docker/docker-compose.yaml up -d
+> ```
 
 ---
 
-## 6. Tablas en MySQL
+## 5. DAG: forest_cover_pipeline
 
-Las tablas base del pipeline se definieron en:
-```text
-mysql-init/01_create_forest_tables.sql
+El DAG se ejecuta automáticamente cada 30 segundos y tiene 2 tareas encadenadas:
+
+```
+extract_raw_data (ShortCircuitOperator) → preprocess_data (PythonOperator)
 ```
 
-Tablas creadas
--	**raw_forest_cover** : Capa cruda del pipeline.
--	**processed_forest_cover** : Capa transformada para entrenamiento.
--	**training_ready_forest_cover** : Tabla reservada para una futura capa intermedia lista para entrenamiento.
--	**model_registry** : Tabla reservada para registrar modelos y métricas.
+### extract_raw_data
 
+Usa `ShortCircuitOperator` para controlar el flujo:
+
+1. Llama a la API externa (`http://host.docker.internal:8090/data?group_number=5`)
+2. Si la API responde 400 (sin datos), retorna `False` → el DAG termina sin error
+3. Consulta `batch_log` para verificar si el batch ya fue cargado
+4. Si ya existe, retorna `False` → el DAG termina (deduplicación)
+5. Si es nuevo: mapea las 55 columnas a un DataFrame, inserta en `raw_forest_cover`, registra en `batch_log` y retorna `True`
+
+### preprocess_data
+
+Solo se ejecuta si `extract_raw_data` retornó `True`:
+
+1. Lee el batch más reciente de `raw_forest_cover` (filtrado por `MAX(ingestion_ts)`)
+2. Decodifica las columnas one-hot de wilderness_area y soil_type a strings categóricos
+3. Inserta el resultado en `processed_forest_cover`
 
 ---
 
-## 7. Configuración actual
+## 6. Configuración
 
-**Base de datos MySQL**
-```text
-AIRFLOW_CONN_MYSQL_DEFAULT: 'mysql://user:user1234@mysql:3306/mydatabase'
+Toda la configuración del pipeline está centralizada en `dags/forest_pipeline/src/config.py`:
+
+| Variable | Valor | Descripción |
+|---|---|---|
+| `API_BASE_URL` | `http://host.docker.internal:8090` | URL de la API desde Docker |
+| `GROUP_ID` | `5` | Grupo asignado del proyecto |
+| `API_TIMEOUT` | `30` | Timeout en segundos para la API |
+| `RAW_TABLE` | `raw_forest_cover` | Tabla de datos crudos (55 cols) |
+| `PROCESSED_TABLE` | `processed_forest_cover` | Tabla de datos procesados (13 cols) |
+| `BATCH_LOG_TABLE` | `batch_log` | Tabla de control de deduplicación |
+
+---
+
+## 7. Cómo levantar el proyecto
+
+Desde la carpeta `docker/`:
+
+```bash
+# Construir imágenes
+docker compose build
+
+# Levantar todos los servicios
+docker compose up -d
+
+# Verificar estado
+docker compose ps
 ```
-**MinIO**
--	MINIO_ENDPOINT = "minio:9000"
--	MINIO_ACCESS_KEY = "minio_user"
--	MINIO_SECRET_KEY = "minio_password"
--	MINIO_BUCKET = "mlmodels"
 
 ---
 
-## 8. Cómo levantar el proyecto
-Desde la carpeta docker/:
+## 8. Cómo ejecutar el DAG
 
-  **A. Construir imagen de Airflow**
-  ```text
-    docker compose build airflow-webserver airflow-scheduler airflow-worker airflow-triggerer airflow-init
-  ```
-  **B. Levantar servicios**
-  ```text
-    docker compose up -d airflow-init airflow-webserver airflow-scheduler airflow-worker airflow-triggerer mysql minio postgres redis
-  ```
-  **C.Verificar estado**
-  ```text
-    docker compose ps
-  ```
----
+El DAG está configurado para ejecutarse automáticamente cada 30 segundos. Para operaciones manuales:
 
-## 9. Cómo ejecutar el DAG
-
-**Ver DAGs disponibles**
- ```text
-docker compose exec airflow-webserver airflow dags list
- ```
-**Despausar DAG si es necesario**
- ```text
+```bash
+# Despausar el DAG
 docker compose exec airflow-webserver airflow dags unpause forest_cover_pipeline
- ```
-**Lanzar ejecución manual**
- ```text
-docker compose exec airflow-webserver airflow dags trigger forest_cover_pipeline
- ```
-**Ver ejecuciones**
- ```text
-docker compose exec airflow-webserver airflow dags list-runs -d forest_cover_pipeline
- ```
-**Ver estado de tareas de una ejecución**
- ```text
-docker compose exec airflow-webserver airflow tasks states-for-dag-run forest_cover_pipeline 2026-03-15T03:46:46+00:00
- ```
 
+# Lanzar ejecución manual
+docker compose exec airflow-webserver airflow dags trigger forest_cover_pipeline
+
+# Ver ejecuciones
+docker compose exec airflow-webserver airflow dags list-runs -d forest_cover_pipeline
+```
+
+Acceso a la UI de Airflow: `http://localhost:8080` (usuario: airflow, contraseña: airflow)
 
 ---
-pendiente
--	conectar la extracción a la API real
--	conocer el endpoint exacto y formato de respuesta
--	mapear las columnas reales del dataset de forest cover
--	capturar y registrar metadatos de batch
--	usar la tabla training_ready_forest_cover si se requiere una capa final
--	registrar métricas y modelos en model_registry
--	integrar la API de inferencia con el modelo almacenado en MinIO
--	ajustar entrenamiento a los datos reales del proyecto
--	faltan imagenes de la api, modelos y dags
--	falta documentacion de los volumenes
--	persistencia de logs
--	eliminar lo que no se necesite de los archivos
 
+## Colaboradores
 
-
-
-
-## 👥 Colaboradores
-
-- 🧑‍💻 **Camilo Cortés** — [![GitHub](https://img.shields.io/badge/GitHub-@cccortesh95-181717?logo=github)](https://github.com/cccortesh95)
-- 🧑‍💻 **Johnny Castañeda** — [![GitHub](https://img.shields.io/badge/GitHub-@Johnny--Castaneda--Marin-181717?logo=github)](https://github.com/Johnny-Castaneda-Marin)
-- 🧑‍💻 **Benkos Triana** — [![GitHub](https://img.shields.io/badge/GitHub-@BenkosT-181717?logo=github)](https://github.com/BenkosT)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- Camilo Cortés — [GitHub](https://github.com/cccortesh95)
+- Johnny Castañeda — [GitHub](https://github.com/Johnny-Castaneda-Marin)
+- Benkos Triana — [GitHub](https://github.com/BenkosT)

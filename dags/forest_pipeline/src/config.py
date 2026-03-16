@@ -2,8 +2,6 @@ MYSQL_CONN_ID = "mysql_default"
 
 RAW_TABLE = "raw_forest_cover"
 PROCESSED_TABLE = "processed_forest_cover"
-TRAINING_TABLE = "training_ready_forest_cover"
-MODEL_REGISTRY_TABLE = "model_registry"
 BATCH_LOG_TABLE = "batch_log"
 
 # Columnas numéricas continuas (índices 0-9)
