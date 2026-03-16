@@ -315,9 +315,8 @@ La clase `ModelTrainer` (`jupyter/notebooks/utils/model_trainer.py`) encapsula:
 - Construcción de `sklearn.Pipeline` (StandardScaler + clasificador)
 - Evaluación con accuracy, precision, recall, F1 (weighted)
 - Visualización de classification report y matriz de confusión
-- Guardado local del pipeline serializado (`.pkl`)
-- Subida automática a MinIO (bucket `mlmodels`)
-- Actualización del reporte CSV en `/app/report/model_metrics.csv`
+- Serialización del pipeline en memoria (`io.BytesIO`) y subida directa a MinIO — sin escribir nada en disco
+- Actualización del reporte CSV (`model_metrics.csv`) también en memoria: descarga el CSV actual de MinIO, actualiza y lo vuelve a subir
 
 ### 7.3 Evidencias
 
@@ -359,10 +358,9 @@ api:
   ports:
     - "8989:8000"
   environment:
-    MODELS_DIR: /app/models
     MINIO_ENDPOINT: minio:9000
     MINIO_ACCESS_KEY: minio_user
-    MINIO_SECRET_KEY: minio_password
+    MINIO_SECRET_KEY: minio1234
   depends_on:
     minio:
       condition: service_healthy
@@ -370,7 +368,7 @@ api:
     - storage-net
 ```
 
-La API corre internamente en el puerto 8000 y se expone en el puerto 8989 del host. Al iniciar, descarga automáticamente todos los modelos y el reporte de métricas desde MinIO.
+La API corre internamente en el puerto 8000 y se expone en el puerto 8989 del host. Todos los modelos y el reporte de métricas se leen directamente desde MinIO en cada request, sin almacenamiento local.
 
 ### 8.2 Estructura
 
@@ -379,29 +377,61 @@ api/
 ├── app.py                  # Endpoints FastAPI
 └── utils/
     ├── schemas.py          # ForestCoverInput (Pydantic)
-    ├── model_utils.py      # sync_from_minio, discover_models, load_model, load_metrics
+    ├── model_utils.py      # discover_models, load_model, load_metrics (todos desde MinIO)
     └── logger.py           # PredictionLogger (registro de predicciones)
 ```
 
 ### 8.3 Endpoints
 
-**`GET /health`** — Health check. Retorna `{"status": "ok"}`. Usado por Docker Compose para verificar que la API está lista.
+**`GET /health`** — Health check. Retorna `{"status": "ok"}`.
 
-**`GET /models`** — Lista los modelos disponibles con sus métricas. Escanea dinámicamente el directorio de modelos.
+**`GET /models`** — Lista los modelos disponibles en MinIO con sus métricas. Consulta el bucket `mlmodels` en cada llamada.
 
-**`GET /report`** — Retorna el reporte completo de métricas de todos los modelos entrenados.
+**`GET /report`** — Retorna el reporte completo de métricas leyendo `model_metrics.csv` directamente desde MinIO.
 
-**`POST /predict/{model_name}`** — Recibe las 12 features de Forest Cover (10 continuas + wilderness_area + soil_type codificados), ejecuta la predicción con el modelo solicitado y retorna el tipo de cobertura.
+**`POST /predict/{model_name}`** — Recibe las 12 features de Forest Cover (10 continuas + wilderness_area + soil_type codificados), descarga el modelo desde MinIO en memoria, ejecuta la predicción y retorna el tipo de cobertura.
 
-**`POST /sync`** — Fuerza re-descarga de modelos desde MinIO sin reiniciar el servicio.
+### 8.4 Validación de campos
 
-### 8.4 Flujo de sincronización con MinIO
+El endpoint `POST /predict/{model_name}` valida automáticamente los campos de entrada mediante Pydantic. Si algún valor está fuera de rango, la API retorna `422 Unprocessable Entity` con detalle del error.
 
-1. Al iniciar (`@app.on_event("startup")`), la API llama a `sync_from_minio()`
-2. Se conecta a MinIO usando `boto3` con las credenciales del compose
-3. Lista todos los objetos del bucket `mlmodels`
-4. Descarga cada `.pkl` y el `model_metrics.csv` a `/app/models`
-5. Los endpoints `GET /models` y `POST /predict` usan los archivos locales
+| Campo | Tipo | Rango válido | Descripción |
+|---|---|---|---|
+| `elevation` | int | 1859–3858 | Elevación en metros |
+| `aspect` | int | 0–360 | Orientación en grados azimut |
+| `slope` | int | 0–66 | Pendiente en grados |
+| `horizontal_distance_to_hydrology` | int | 0–1397 | Distancia horizontal al agua (m) |
+| `vertical_distance_to_hydrology` | int | -173–601 | Distancia vertical al agua (m) |
+| `horizontal_distance_to_roadways` | int | 0–7117 | Distancia horizontal a carretera (m) |
+| `hillshade_9am` | int | 0–255 | Índice de sombra a las 9am |
+| `hillshade_noon` | int | 0–255 | Índice de sombra al mediodía |
+| `hillshade_3pm` | int | 0–255 | Índice de sombra a las 3pm |
+| `horizontal_distance_to_fire_points` | int | 0–7173 | Distancia horizontal a punto de ignición (m) |
+| `wilderness_area` | int | 0–3 | 0=Rawah, 1=Neota, 2=Comanche Peak, 3=Cache la Poudre |
+| `soil_type` | int | 0–39 | Tipo de suelo codificado (C1–C40) |
+
+Ejemplo de error de validación:
+
+```json
+{
+  "detail": [
+    {
+      "type": "less_than_equal",
+      "loc": ["body", "aspect"],
+      "msg": "Input should be less than or equal to 360",
+      "input": 400
+    }
+  ]
+}
+```
+
+### 8.5 Integración con MinIO
+
+La API no usa disco local. En cada operación:
+
+- `GET /models` → `list_objects_v2` sobre el bucket `mlmodels`, filtra `.pkl`
+- `POST /predict` → `get_object` del `.pkl` correspondiente, deserializa con `joblib` en un `BytesIO`
+- `GET /report` → `get_object` de `model_metrics.csv`, parsea con `pandas` en memoria
 
 ### 8.5 Evidencias
 
@@ -445,7 +475,7 @@ docker compose ps
 | Servicio | URL | Credenciales |
 |---|---|---|
 | Airflow UI | http://localhost:8080 | airflow / airflow |
-| MinIO Console | http://localhost:9001 | minio_user / minio_password |
+| MinIO Console | http://localhost:9001 | minio_user / minio1234 |
 | Jupyter Lab | http://localhost:8888 | Token: mlops12345 |
 | API (Swagger) | http://localhost:8989/docs | — |
 | MySQL | localhost:3306 | user / user1234 |
