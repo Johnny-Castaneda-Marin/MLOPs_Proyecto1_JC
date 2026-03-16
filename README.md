@@ -2,8 +2,6 @@
 
 ## Tabla de Contenidos
 
-## Tabla de Contenidos
-
 - [📁 1. Estructura del Proyecto](#1-estructura-del-proyecto)
 - [🐳 2. Creación de Dockerfiles custom](#2-creación-de-dockerfiles-custom)
 - [🗄️ 3. Servicio MySQL en Docker Compose](#3-servicio-mysql-en-docker-compose)
