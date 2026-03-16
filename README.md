@@ -181,25 +181,53 @@ El archivo `mysql-init/create_forest_tables.sql` se ejecuta solo en la primera i
 
 El archivo `docker/docker-compose.yaml` define tres redes aisladas que segmentan los servicios:
 
-```
-airflow-net (bridge, con acceso a internet)
-├── PostgreSQL        — BD interna de Airflow (metadatos, DAG runs)
-├── Redis             — broker de mensajes para Celery
-├── Airflow Webserver — UI en puerto 8080
-├── Airflow Scheduler — planificación de DAGs
-├── Airflow Worker    — ejecución de tareas vía Celery
-├── Airflow Triggerer — triggers asincrónicos
-├── Airflow Init      — migración de BD y creación de usuario admin
-└── MySQL             — almacenamiento del pipeline
+```mermaid
+graph TB
+    subgraph airflow-net
+        PG[(PostgreSQL<br/>:5432)]
+        RD[(Redis<br/>:6379)]
+        WS[Airflow Webserver<br/>:8080]
+        SC[Airflow Scheduler]
+        WK[Airflow Worker]
+        TR[Airflow Triggerer]
+        INIT[Airflow Init]
+    end
 
-storage-net
-├── MinIO             — almacenamiento de objetos (modelos) en puertos 9000/9001
-└── API               — servicio FastAPI de inferencia en puerto 8989
+    subgraph storage-net
+        API[API FastAPI<br/>:8989]
+    end
 
-jupyter-net
-├── Jupyter           — notebooks de exploración en puerto 8888
-├── MySQL             — compartido con airflow-net
-└── MinIO             — compartido con storage-net
+    subgraph jupyter-net
+        JUP[Jupyter Lab<br/>:8888]
+    end
+
+    MYSQL[(MySQL<br/>:3306)]
+    MINIO[(MinIO<br/>:9000 / :9001)]
+
+    %% Airflow internals
+    WS & SC & WK & TR --> PG
+    WS & SC & WK & TR --> RD
+    WK -->|MySqlHook| MYSQL
+    WK -.->|host.docker.internal:8090| EXT((API Externa))
+
+    %% MySQL en dos redes
+    MYSQL --- airflow-net
+    MYSQL --- jupyter-net
+
+    %% MinIO en dos redes
+    MINIO --- storage-net
+    MINIO --- jupyter-net
+
+    %% Jupyter
+    JUP -->|SQLAlchemy| MYSQL
+    JUP -->|boto3| MINIO
+
+    %% API
+    API -->|boto3 on-demand| MINIO
+
+    style airflow-net fill:#e8f4fd,stroke:#2196F3
+    style storage-net fill:#fff3e0,stroke:#FF9800
+    style jupyter-net fill:#e8f5e9,stroke:#4CAF50
 ```
 
 ### Comunicación entre servicios
