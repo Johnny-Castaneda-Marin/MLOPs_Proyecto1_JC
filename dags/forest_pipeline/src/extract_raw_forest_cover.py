@@ -16,10 +16,14 @@ from forest_pipeline.src.config import (
 
 
 def _get_api_data() -> dict:
-    """Llama a la API con group_number y retorna el dict JSON
-    con las claves group_number, batch_number y data."""
+    """Llama a la API con group_number y retorna el dict JSON.
+    
+    Retorna None si la API responde 400 (sin datos disponibles).
+    """
     url = f"{API_BASE_URL}/data?group_number={GROUP_ID}"
     response = requests.get(url, timeout=API_TIMEOUT)
+    if response.status_code == 400:
+        return None
     response.raise_for_status()
     return response.json()
 
@@ -72,6 +76,9 @@ def extract_raw_forest_cover() -> bool:
     """
     # Paso 1: Obtener datos de la API
     response = _get_api_data()
+    if response is None:
+        print("La API no tiene más datos disponibles para este grupo. Omitiendo.")
+        return False
     batch_number = response["batch_number"]
     group_number = response["group_number"]
     data = response["data"]
