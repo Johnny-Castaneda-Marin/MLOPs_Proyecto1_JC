@@ -179,6 +179,11 @@ El archivo `mysql-init/create_forest_tables.sql` se ejecuta solo en la primera i
 
 ## 5. Arquitectura Docker Compose
 
+<p align="center">
+    <img src="images/arquitectura.png" alt="Arquitectura del Proyecto" width="600"/>
+</p>
+
+
 El archivo `docker/docker-compose.yaml` define tres redes aisladas que segmentan los servicios:
 
 ```mermaid
@@ -269,6 +274,10 @@ with DAG(
 
 ### 6.2 Workflow
 
+<p align="center">
+  <img src="images/bloque_dag.png" alt="workflow" width="600"/>
+</p>
+
 ```
 extract_raw_data (ShortCircuitOperator) → preprocess_data (PythonOperator)
 ```
@@ -285,6 +294,7 @@ Usa `ShortCircuitOperator` para controlar el flujo:
 4. Si ya existe, retorna `False` → el DAG termina
 5. Si es nuevo: mapea las 55 columnas a un DataFrame, inserta en `raw_forest_cover`, registra en `batch_log` y retorna `True`
 
+
 ### 6.4 preprocess_data
 
 Solo se ejecuta si `extract_raw_data` retornó `True`:
@@ -298,14 +308,15 @@ Solo se ejecuta si `extract_raw_data` retornó `True`:
 DAG ejecutado correctamente:
 
 <p align="center">
-  <img src="images/dag_ejecutado.png" alt="DAG ejecutado" width="600"/>
+  <img src="images/ejecucion_del_dag .png" alt="DAG ejecutado" width="600"/>
 </p>
 
 Datos en `raw_forest_cover` (55 columnas one-hot):
 
-<p align="center">
-  <img src="images/raw_forest_cover.png" alt="Datos raw" width="600"/>
-</p>
+<div align="center">
+  <img src="images/conexion_bbdd.png" alt="workflow" width="900">
+</div>
+
 
 Datos en `processed_forest_cover` (13 columnas categóricas):
 
