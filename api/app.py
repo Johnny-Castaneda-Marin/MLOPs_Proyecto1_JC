@@ -1,18 +1,24 @@
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, field_validator
 
 from utils.model_utils import (
-    SPECIES_MAP,
+    COVER_TYPE_MAP,
     discover_models,
-    is_pipeline,
     load_metrics,
     load_model,
+    sync_from_minio,
 )
 from utils.logger import PredictionLogger
+from utils.schemas import ForestCoverInput
 
-app = FastAPI(title="Penguin Classifier API")
+app = FastAPI(title="Forest Cover Type Classifier API")
 pred_logger = PredictionLogger()
+
+
+@app.on_event("startup")
+async def startup():
+    """Al iniciar, descarga modelos y reporte desde MinIO."""
+    sync_from_minio()
 
 
 @app.get("/health")
@@ -20,78 +26,36 @@ async def health():
     return {"status": "ok"}
 
 
-class PenguinInput(BaseModel):
-    island: int = Field(default=1, examples=[1])
-    bill_length_mm: float = Field(default=39.1, examples=[39.1])
-    bill_depth_mm: float = Field(default=18.7, examples=[18.7])
-    flipper_length_mm: int = Field(default=181, examples=[181])
-    body_mass_g: int = Field(default=3750, examples=[3750])
-    sex: int = Field(default=1, examples=[1])
-    year: int = Field(default=2007, examples=[2007])
-
-    @field_validator("island")
-    def validate_island(cls, v):
-        if v not in (1, 2, 3):
-            raise ValueError("island debe ser 1, 2 o 3")
-        return v
-
-    @field_validator("bill_length_mm")
-    def validate_bill_length(cls, v):
-        if not (10.0 <= v <= 100.0):
-            raise ValueError("bill_length_mm debe estar entre 10.0 y 100.0")
-        return v
-
-    @field_validator("bill_depth_mm")
-    def validate_bill_depth(cls, v):
-        if not (5.0 <= v <= 35.0):
-            raise ValueError("bill_depth_mm debe estar entre 5.0 y 35.0")
-        return v
-
-    @field_validator("flipper_length_mm")
-    def validate_flipper_length(cls, v):
-        if not (100 <= v <= 300):
-            raise ValueError("flipper_length_mm debe estar entre 100 y 300")
-        return v
-
-    @field_validator("body_mass_g")
-    def validate_body_mass(cls, v):
-        if not (1000 <= v <= 10000):
-            raise ValueError("body_mass_g debe estar entre 1000 y 10000")
-        return v
-
-    @field_validator("sex")
-    def validate_sex(cls, v):
-        if v not in (0, 1):
-            raise ValueError("sex debe ser 0 o 1")
-        return v
-
-    @field_validator("year")
-    def validate_year(cls, v):
-        if not (2000 <= v <= 2030):
-            raise ValueError("year debe estar entre 2000 y 2030")
-        return v
+@app.post("/sync")
+async def sync():
+    """Fuerza re-descarga de modelos desde MinIO."""
+    sync_from_minio()
+    available = discover_models()
+    return {"synced_models": list(available.keys())}
 
 
-def _build_features(data: PenguinInput) -> np.ndarray:
-    bill_ratio = data.bill_length_mm / data.bill_depth_mm
-    body_mass_kg = data.body_mass_g / 1000
+def _build_features(data: ForestCoverInput) -> np.ndarray:
     return np.array([[
-        data.island, data.bill_length_mm, data.bill_depth_mm,
-        data.flipper_length_mm, data.body_mass_g, data.sex,
-        data.year, bill_ratio, body_mass_kg
+        data.elevation, data.aspect, data.slope,
+        data.horizontal_distance_to_hydrology,
+        data.vertical_distance_to_hydrology,
+        data.horizontal_distance_to_roadways,
+        data.hillshade_9am, data.hillshade_noon, data.hillshade_3pm,
+        data.horizontal_distance_to_fire_points,
+        data.wilderness_area, data.soil_type,
     ]])
 
 
 @app.get("/models")
 async def list_models():
-    """Lista todos los modelos disponibles dinámicamente."""
+    """Lista todos los modelos disponibles con sus métricas."""
     available = discover_models()
     metrics = load_metrics()
     return {
         "available_models": [
             {
                 "name": name,
-                "endpoint": f"POST /classify/{name}",
+                "endpoint": f"POST /predict/{name}",
                 "metrics": metrics.get(name, {}),
             }
             for name in sorted(available.keys())
@@ -99,9 +63,18 @@ async def list_models():
     }
 
 
-@app.post("/classify/{model_name}")
-async def classify(model_name: str, data: PenguinInput):
-    """Clasifica un pingüino usando el modelo especificado"""
+@app.get("/report")
+async def get_report():
+    """Retorna el reporte completo de métricas de todos los modelos."""
+    metrics = load_metrics()
+    if not metrics:
+        raise HTTPException(status_code=404, detail="No hay reporte de métricas disponible.")
+    return {"report": metrics}
+
+
+@app.post("/predict/{model_name}")
+async def predict(model_name: str, data: ForestCoverInput):
+    """Predice el tipo de cobertura forestal usando el modelo especificado."""
     available = discover_models()
     if model_name not in available:
         raise HTTPException(
@@ -115,14 +88,12 @@ async def classify(model_name: str, data: PenguinInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    species_name = SPECIES_MAP.get(prediction)
-    if species_name is None:
-        raise HTTPException(status_code=404, detail="Especie no encontrada")
+    cover_name = COVER_TYPE_MAP.get(prediction, "Desconocido")
 
     result = {
         "model": model_name,
-        "species_id": prediction,
-        "species_name": species_name,
+        "cover_type_id": prediction,
+        "cover_type_name": cover_name,
     }
 
     pred_logger.log(data.model_dump(), result)
