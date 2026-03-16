@@ -303,10 +303,8 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ../models:/app/models
-      - ../report:/app/report
-      - ../data:/app/data
       - ../results:/app/results
+      - ../jupyter/notebooks:/app/notebooks
     environment:
       - JUPYTER_TOKEN=mlops12345
       - MYSQL_HOST=mysql
