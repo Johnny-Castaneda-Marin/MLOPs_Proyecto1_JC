@@ -535,20 +535,6 @@ docker compose exec airflow-webserver airflow dags trigger forest_cover_pipeline
 
 Verificación que el DAG se ejecuta y los datos llegan a MySQL:
 
-```bash
-# Ver ejecuciones del DAG
-docker compose exec airflow-webserver airflow dags list-runs -d forest_cover_pipeline
-
-# Verificar datos en raw
-docker compose exec mysql mysql -u user -puser1234 mydatabase -e "SELECT COUNT(*) FROM raw_forest_cover;"
-
-# Verificar datos procesados
-docker compose exec mysql mysql -u user -puser1234 mydatabase -e "SELECT COUNT(*) FROM processed_forest_cover;"
-
-# Verificar batch_log
-docker compose exec mysql mysql -u user -puser1234 mydatabase -e "SELECT * FROM batch_log;"
-```
-
 <p align="center">
   <img src="images/ejecucion_del_dag .png" alt="Prueba DAG" width="600"/>
 </p>
