@@ -533,7 +533,7 @@ docker compose exec airflow-webserver airflow dags trigger forest_cover_pipeline
 
 ### 10.1 Pipeline de ingesta (DAG)
 
-Verificar que el DAG se ejecuta y los datos llegan a MySQL:
+Verificación que el DAG se ejecuta y los datos llegan a MySQL:
 
 ```bash
 # Ver ejecuciones del DAG
@@ -573,9 +573,6 @@ curl http://localhost:8989/health
 # Listar modelos
 curl http://localhost:8989/models
 
-# Reporte de métricas
-curl http://localhost:8989/report
-
 # Predicción con Random Forest
 curl -X POST http://localhost:8989/predict/randomforest \
   -H "Content-Type: application/json" \
@@ -596,12 +593,20 @@ curl -X POST http://localhost:8989/predict/randomforest \
 ```
 
 <p align="center">
-  <img src="images/prueba_api.png" alt="Prueba API" width="600"/>
+  <img src="images/prueba_api_health.png" alt="Prueba API - Healthcheck" width="600"/>
+</p>
+
+<p align="center">
+  <img src="images/prueba_models.png" alt="Prueba API - listado de modelos" width="600"/>
+</p>
+
+<p align="center">
+  <img src="images/prueba_api.png" alt="Prueba API - Inferencia" width="600"/>
 </p>
 
 ### 10.4 MinIO
 
-Verificar que los modelos y el reporte están almacenados:
+Verificación de que los modelos y el reporte están almacenados:
 
 <p align="center">
   <img src="images/modelos_en _minio.png" alt="Prueba MinIO" width="600"/>
