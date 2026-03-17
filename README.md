@@ -597,7 +597,7 @@ curl -X POST http://localhost:8989/predict/randomforest \
 </p>
 
 <p align="center">
-  <img src="images/prueba_models.png" alt="Prueba API - listado de modelos" width="600"/>
+  <img src="images/prueba_api_models.png" alt="Prueba API - listado de modelos" width="600"/>
 </p>
 
 <p align="center">
