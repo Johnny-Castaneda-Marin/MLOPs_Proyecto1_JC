@@ -170,12 +170,6 @@ El archivo `mysql-init/create_forest_tables.sql` se ejecuta solo en la primera i
 
 **`batch_log`** — Control de deduplicación. Registra cada batch ingestado con una restricción `UNIQUE` sobre `(batch_number, group_number)` para evitar cargas duplicadas.
 
-> Si necesitas recrear las tablas (por cambios en el esquema), debes eliminar el volumen de MySQL:
-> ```bash
-> docker compose -f docker/docker-compose.yaml down -v
-> docker compose -f docker/docker-compose.yaml up -d
-> ```
-
 ---
 
 ## 5. Arquitectura Docker Compose
