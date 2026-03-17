@@ -290,7 +290,7 @@ extract_raw_data (ShortCircuitOperator) → preprocess_data (PythonOperator)
 Usa `ShortCircuitOperator` para controlar el flujo:
 
 1. Llama a la API externa (`http://host.docker.internal:8090/data?group_number=5`)
-2. Si la API responde 400 (sin datos disponibles), retorna `False` → el DAG termina sin error
+2. Si la API responde 400 (sin datos disponibles), retorna `False` → el DAG termina
 3. Consulta `batch_log` para verificar si el batch ya fue cargado (deduplicación)
 4. Si ya existe, retorna `False` → el DAG termina
 5. Si es nuevo: mapea las 55 columnas a un DataFrame, inserta en `raw_forest_cover`, registra en `batch_log` y retorna `True`
@@ -411,10 +411,6 @@ api:
 La API corre internamente en el puerto 8000 y se expone en el puerto 8989 del host. Todos los modelos y el reporte de métricas se leen directamente desde MinIO en cada request, sin almacenamiento local.
 
 ### 8.2 Estructura
-
-<p align="center">
-  <img src="images/api_grupo_5.png" alt="Modelos en MinIO" width="600"/>
-</p>
 
 ```
 api/
